@@ -63,7 +63,7 @@ jobs:
       - checkout
       - run:
           command: |
-            if [[ ! "${CIRCLE_TAG}" =~ (.+)/v?(.+) ]]; do
+            if [[ ! "${CIRCLE_TAG}" =~ (.+)/v?(.+) ]]; then
               echo "Tag ${CIRCLE_TAG} must match regexp .+/v?.+"
               exit 1
             done
