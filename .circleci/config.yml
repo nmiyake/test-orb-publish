@@ -66,7 +66,7 @@ jobs:
             if [[ ! "${CIRCLE_TAG}" =~ (.+)/v?(.+) ]]; then
               echo "Tag ${CIRCLE_TAG} must match regexp .+/v?.+"
               exit 1
-            done
+            fi
             ORB="${BASH_REMATCH[1]}"
             VERSION="${BASH_REMATCH[2]}"
 
