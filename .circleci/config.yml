@@ -61,9 +61,6 @@ jobs:
       - image: circleci/circleci-cli:0.1.2709
     steps:
       - checkout
-      - run: echo "Tag value is ${CIRCLE_TAG}"
-      - run:  |
-          [[ "${CIRCLE_TAG}" =~ "(.+)/v?(.+)" ]]
       - run:
           command: |
             "${CIRCLE_TAG}" =~ (.+)/v?(.+)
@@ -81,19 +78,19 @@ jobs:
 
             circleci orb publish ${ORB_PATH} nmiyake/${ORB}@${VERSION} --token $CIRCLECI_API_TOKEN
 
-all-tags-filter: &all-tags-filter
+release-tags-filter: &release-tags-filter
   filters:
     tags:
-      only: /.*/
+      only: /.+\/v?.+/
 
 workflows:
   version: 2
   main:
     jobs:
       - lint:
-          <<: *all-tags-filter
+          <<: *release-tags-filter
       - build:
-          <<: *all-tags-filter
+          <<: *release-tags-filter
 
       - dev-publish:
           requires:
@@ -109,6 +106,6 @@ workflows:
             - build
           filters:
             tags:
-              only: /.*/
+              only: /.+\/v?.+/
             branches:
               ignore: /.*/
