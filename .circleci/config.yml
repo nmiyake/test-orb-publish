@@ -1,0 +1,85 @@
+### Jobs ###
+version: 2
+jobs:
+  # verify YAML
+  lint:
+    docker:
+      - image: singapore/lint-condo
+    steps:
+      - checkout
+      - run:
+          'yamllint .'
+
+  # build orbs
+  build:
+    docker:
+      - image: circleci/circleci-cli:0.1.2709
+    steps:
+      - checkout
+      - run: "echo -e \"token: placeholder\nverbose: false > ~/.circleci/cli.yml\""
+      - run: bash scripts/validate-orbs.sh
+
+  # publish development version of orbs. Note that this publishes a development version for all orbs (whether or not they have been modified).
+  # TODO: use iynere/compare-url@0.1.5 to get set of changed projects
+  dev-publish:
+    docker:
+      - image: circleci/circleci-cli:0.1.2709
+    steps:
+      - checkout
+      - run:
+          command: |
+            for ORB in src/*/; do
+              orbname=$(basename $ORB)
+              (ls ${ORB}orb.yml && echo "orb.yml found, attempting to publish...") || echo "No orb.yml file was found - the next line is expected to fail."
+              circleci orb publish ${ORB}orb.yml nmiyake/${orbname}@dev:${CIRCLE_BRANCH}-${CIRCLE_SHA1} --token $CIRCLECI_API_TOKEN
+            done
+
+  release-publish:
+    docker:
+      - image: circleci/circleci-cli:0.1.2709
+    steps:
+      - checkout
+      - run: echo "Tag value is ${CIRCLE_TAG}"
+      - run:  |
+          [[ "${CIRCLE_TAG}" =~ "(.+)/v?(.+)" ]]
+      - run:
+          command: |
+            "${CIRCLE_TAG}" =~ (.+)/v?(.+)
+            ORB="${BASH_REMATCH[1]}"
+            VERSION="${BASH_REMATCH[2]}"
+
+            echo "WANT_ORB=${WANT_ORB}"
+            echo "VERSION=${VERSION}"
+
+            ORB_PATH=src/${ORB}/orb.yml
+            if [ ! -f "${ORB_PATH}" ]; then
+                echo "No orb found at ${ORB_PATH}"
+                exit 1
+            fi
+
+            circleci orb publish ${ORB_PATH} nmiyake/${ORB}@${VERSION} --token $CIRCLECI_API_TOKEN
+
+workflows:
+  version: 2
+  main:
+    jobs:
+      - lint
+      - build
+
+      - dev-publish:
+          requires:
+            - lint
+            - build
+          filters:
+            branches:
+              only: develop
+
+      - release-publish:
+          requires:
+            - lint
+            - build
+          filters:
+            tags:
+              only: /.*/
+            branches:
+              ignore: /.*/

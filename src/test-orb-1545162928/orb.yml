@@ -1,0 +1,12 @@
+version: 2.1
+
+description: |
+  Echo goodbye
+
+commands:
+  hello:
+    steps:
+      - run:
+          name: "Echo goodbye"
+          command: |
+            echo "goodbye"

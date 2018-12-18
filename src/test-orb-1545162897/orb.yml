@@ -1,0 +1,12 @@
+version: 2.1
+
+description: |
+  Echo hello
+
+commands:
+  hello:
+    steps:
+      - run:
+          name: "Echo hello"
+          command: |
+            echo "hello"
