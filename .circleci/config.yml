@@ -1,5 +1,9 @@
 ### Jobs ###
-version: 2
+version: 2.1
+
+orbs:
+  circle-compare-url: iynere/compare-url@0.1.5
+
 jobs:
   # verify YAML
   lint:
@@ -19,22 +23,33 @@ jobs:
       - run: "echo -e \"token: placeholder\nverbose: false > ~/.circleci/cli.yml\""
       - run: bash scripts/validate-orbs.sh
 
-  # publish development version of orbs. Note that this publishes a development version for all orbs (whether or not they have been modified).
-  # TODO: use iynere/compare-url@0.1.5 to get set of changed projects
+  # publish development version of orbs. Only publishes orbs with modified definitions.
   dev-publish:
     docker:
       - image: circleci/circleci-cli:0.1.2709
     steps:
       - checkout
+      - circle-compare-url/reconstruct
       - run:
           command: |
+            # save value stored in file to a local env var
+            CIRCLE_COMPARE_URL=$(cat CIRCLE_COMPARE_URL.txt)
+
+            COMMIT_RANGE=$(echo $CIRCLE_COMPARE_URL | sed 's:^.*/compare/::g')
+            echo "Commit range: $COMMIT_RANGE"
+
             for ORB in src/*/; do
-              orbname=$(basename $ORB)
+              ORB_NAME=$(basename $ORB)
               ORB_PATH=${ORB}orb.yml
 
               if [ ! -f "${ORB_PATH}" ]; then
                 echo "No orb found at ${ORB_PATH}"
                 exit 1
+              fi
+
+              if [[ ! $(git diff ${COMMIT_RANGE} --name-status | grep "${ORB_NAME}") ]]; then
+                echo "${ORB_NAME} not modified; no need to publish"
+                continue
               fi
 
               echo "Publishing ${ORB_PATH}..."
