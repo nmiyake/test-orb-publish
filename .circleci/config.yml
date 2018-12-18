@@ -66,12 +66,19 @@ jobs:
 
             circleci orb publish ${ORB_PATH} nmiyake/${ORB}@${VERSION} --token $CIRCLECI_API_TOKEN
 
+all-tags-filter: &all-tags-filter
+  filters:
+    tags:
+      only: /.*/
+
 workflows:
   version: 2
   main:
     jobs:
-      - lint
-      - build
+      - lint:
+          <<: *all-tags-filter
+      - build:
+          <<: *all-tags-filter
 
       - dev-publish:
           requires:
