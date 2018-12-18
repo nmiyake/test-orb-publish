@@ -30,7 +30,14 @@ jobs:
           command: |
             for ORB in src/*/; do
               orbname=$(basename $ORB)
-              (ls ${ORB}orb.yml && echo "orb.yml found, attempting to publish...") || echo "No orb.yml file was found - the next line is expected to fail."
+              ORB_PATH=${ORB}orb.yml
+
+              if [ ! -f "${ORB_PATH}" ]; then
+                echo "No orb found at ${ORB_PATH}"
+                exit 1
+              fi
+
+              echo "Publishing ${ORB_PATH}..."
               circleci orb publish ${ORB}orb.yml nmiyake/${orbname}@dev:${CIRCLE_BRANCH}-${CIRCLE_SHA1} --token $CIRCLECI_API_TOKEN
             done
 
