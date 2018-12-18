@@ -1,0 +1,105 @@
+version: 2.1
+
+orbs:
+  circle-compare-url: iynere/compare-url@0.1.5
+
+description: |
+  Provides jobs for linting, building and publishing CircleCI orbs in a repository that defines orbs in src/*/orb.yml.
+
+executors:
+  circleci-cli:
+    parameters:
+      version:
+        default: 0.1.2709
+        description: |
+          Version of the circleci/circleci-cli Docker image to use. Default is 0.1.2709.
+        type: string
+    docker:
+      - image: circleci/circleci-cli:<< parameters.version >>
+
+jobs:
+  lint:
+    docker:
+      - image: singapore/lint-condo
+    steps:
+      - run: 'yamllint -d "{extends: relaxed, rules: {line-length: {max: 120, allow-non-breakable-inline-mappings: true}}}" .'
+
+  build:
+    parameters:
+      executor:
+        type: executor
+        default: circleci-cli
+    executor: << parameters.executor >>
+    steps:
+      - checkout
+      - run: "echo -e \"token: placeholder\nverbose: false > ~/.circleci/cli.yml\""
+      - run: |
+          for ORB in src/*; do
+            echo "Validating {$ORB}..."
+            circleci orb validate ${ORB}/orb.yml; RETURN_CODE=$?
+            if [[ $RETURN_CODE != 0 ]]; then
+            	exit 1
+            fi
+          done
+
+  dev-publish:
+    parameters:
+      executor:
+        type: executor
+        default: circleci-cli
+      namespace:
+        type: string
+    executor: << parameters.executor >>
+    steps:
+      - checkout
+      - circle-compare-url/reconstruct
+      - run:
+          command: |
+            # save value stored in file to a local env var
+            CIRCLE_COMPARE_URL=$(cat CIRCLE_COMPARE_URL.txt)
+            COMMIT_RANGE=$(echo $CIRCLE_COMPARE_URL | sed 's:^.*/compare/::g')
+
+            for ORB in src/*/; do
+              ORB_NAME=$(basename $ORB)
+              ORB_PATH=${ORB}orb.yml
+
+              if [ ! -f "${ORB_PATH}" ]; then
+                echo "No orb found at ${ORB_PATH}"
+                exit 1
+              fi
+
+              if [[ ! $(git diff ${COMMIT_RANGE} --name-status | grep "${ORB_NAME}") ]]; then
+                echo "${ORB_NAME} not modified; no need to publish"
+                continue
+              fi
+
+              echo "Publishing ${ORB_PATH}..."
+              circleci orb publish ${ORB}orb.yml << parameters.namespace >>/${orbname}@dev:${CIRCLE_BRANCH}-${CIRCLE_SHA1} --token $CIRCLECI_API_TOKEN
+            done
+
+  release-publish:
+    parameters:
+      executor:
+        type: executor
+        default: circleci-cli
+      namespace:
+        type: string
+    executor: << parameters.executor >>
+    steps:
+      - checkout
+      - run:
+          command: |
+            if [[ ! "${CIRCLE_TAG}" =~ (.+)/v?(.+) ]]; then
+              echo "Tag ${CIRCLE_TAG} must match regexp .+/v?.+"
+              exit 1
+            fi
+            ORB="${BASH_REMATCH[1]}"
+            VERSION="${BASH_REMATCH[2]}"
+
+            ORB_PATH=src/${ORB}/orb.yml
+            if [ ! -f "${ORB_PATH}" ]; then
+                echo "No orb found at ${ORB_PATH}"
+                exit 1
+            fi
+
+            circleci orb publish ${ORB_PATH} << parameters.namespace >>/${ORB}@${VERSION} --token $CIRCLECI_API_TOKEN

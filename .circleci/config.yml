@@ -1,112 +1,34 @@
-### Jobs ###
 version: 2.1
 
 orbs:
-  circle-compare-url: iynere/compare-url@0.1.5
-
-jobs:
-  # verify YAML
-  lint:
-    docker:
-      - image: singapore/lint-condo
-    steps:
-      - checkout
-      - run:
-          'yamllint .'
-
-  # build orbs
-  build:
-    docker:
-      - image: circleci/circleci-cli:0.1.2709
-    steps:
-      - checkout
-      - run: "echo -e \"token: placeholder\nverbose: false > ~/.circleci/cli.yml\""
-      - run: bash scripts/validate-orbs.sh
-
-  # publish development version of orbs. Only publishes orbs with modified definitions.
-  dev-publish:
-    docker:
-      - image: circleci/circleci-cli:0.1.2709
-    steps:
-      - checkout
-      - circle-compare-url/reconstruct
-      - run:
-          command: |
-            # save value stored in file to a local env var
-            CIRCLE_COMPARE_URL=$(cat CIRCLE_COMPARE_URL.txt)
-
-            COMMIT_RANGE=$(echo $CIRCLE_COMPARE_URL | sed 's:^.*/compare/::g')
-            echo "Commit range: $COMMIT_RANGE"
-
-            for ORB in src/*/; do
-              ORB_NAME=$(basename $ORB)
-              ORB_PATH=${ORB}orb.yml
-
-              if [ ! -f "${ORB_PATH}" ]; then
-                echo "No orb found at ${ORB_PATH}"
-                exit 1
-              fi
-
-              if [[ ! $(git diff ${COMMIT_RANGE} --name-status | grep "${ORB_NAME}") ]]; then
-                echo "${ORB_NAME} not modified; no need to publish"
-                continue
-              fi
-
-              echo "Publishing ${ORB_PATH}..."
-              circleci orb publish ${ORB}orb.yml nmiyake/${orbname}@dev:${CIRCLE_BRANCH}-${CIRCLE_SHA1} --token $CIRCLECI_API_TOKEN
-            done
-
-  release-publish:
-    docker:
-      - image: circleci/circleci-cli:0.1.2709
-    steps:
-      - checkout
-      - run:
-          command: |
-            if [[ ! "${CIRCLE_TAG}" =~ (.+)/v?(.+) ]]; then
-              echo "Tag ${CIRCLE_TAG} must match regexp .+/v?.+"
-              exit 1
-            fi
-            ORB="${BASH_REMATCH[1]}"
-            VERSION="${BASH_REMATCH[2]}"
-
-            echo "ORB=${ORB}"
-            echo "VERSION=${VERSION}"
-
-            ORB_PATH=src/${ORB}/orb.yml
-            if [ ! -f "${ORB_PATH}" ]; then
-                echo "No orb found at ${ORB_PATH}"
-                exit 1
-            fi
-
-            circleci orb publish ${ORB_PATH} nmiyake/${ORB}@${VERSION} --token $CIRCLECI_API_TOKEN
+  orb-publisher: nmiyake/orb-publisher@dev:scratch-1
 
 release-tags-filter: &release-tags-filter
   filters:
     tags:
       only: /.+\/v?.+/
 
+publish-block: &publish-block
+  namespace: nmiyake
+  requires:
+    - orb-publisher/lint
+    - orb-publisher/build
+
 workflows:
   version: 2
   main:
     jobs:
-      - lint:
+      - orb-publisher/lint:
           <<: *release-tags-filter
-      - build:
+      - orb-publisher/build:
           <<: *release-tags-filter
-
-      - dev-publish:
-          requires:
-            - lint
-            - build
+      - orb-publisher/dev-publish:
+          <<: *publish-block
           filters:
             branches:
               only: develop
-
-      - release-publish:
-          requires:
-            - lint
-            - build
+      - orb-publisher/release-publish:
+          <<: *publish-block
           filters:
             tags:
               only: /.+\/v?.+/
