@@ -159,4 +159,4 @@ jobs:
                 exit 1
             fi
 
-            circleci orb publish ${ORB_PATH} << parameters.namespace >>/${ORB}@${VERSION} --token <<# parameters.token-variable >>--token << parameters.token-variable >> <</ parameters.token-variable >>
+            circleci orb publish ${ORB_PATH} << parameters.namespace >>/${ORB}@${VERSION} <<# parameters.token-variable >>--token << parameters.token-variable >> <</ parameters.token-variable >>
