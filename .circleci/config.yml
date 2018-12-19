@@ -1,7 +1,7 @@
 version: 2.1
 
 orbs:
-  orb-publisher: nmiyake/orb-publisher@0.0.1
+  orb-publisher: nmiyake/orb-publisher@dev:scratch-3
 
 release-tags-filter: &release-tags-filter
   filters:
@@ -10,6 +10,7 @@ release-tags-filter: &release-tags-filter
 
 publish-block: &publish-block
   namespace: nmiyake
+  token-variable: '$CIRCLECI_API_TOKEN'
   requires:
     - orb-publisher/lint
     - orb-publisher/build

@@ -6,25 +6,84 @@ orbs:
 description: |
   Provides jobs for linting, building and publishing CircleCI orbs in a repository that defines orbs in src/*/orb.yml.
 
+examples:
+  full_publish:
+    description: |
+      A full configuration for a repository that defines orbs in src/*/orb.yml that publishes orbs to the "nmiyake"
+      namespace and publishes development versions from the "develop" branch. To adapt this, simply replace "nmiyake" in
+      the example below with the desired namespace. The development branch is specified in the branch filter of the
+      "orb-publisher/dev-publish" job.
+    usage:
+      version: 2.1
+      orbs:
+        orb-publisher: nmiyake/orb-publisher@0.0.1
+      release-tags-filter: &release-tags-filter
+        filters:
+          tags:
+            only: /.+\/v?.+/
+      publish-block: &publish-block
+        namespace: nmiyake
+        token-variable: '$CIRCLECI_API_TOKEN'
+        requires:
+          - orb-publisher/lint
+          - orb-publisher/build
+      workflows:
+        version: 2
+        main:
+          jobs:
+            - orb-publisher/lint:
+                <<: *release-tags-filter
+            - orb-publisher/build:
+                <<: *release-tags-filter
+            - orb-publisher/dev-publish:
+                <<: *publish-block
+                filters:
+                  branches:
+                    only: develop
+            - orb-publisher/release-publish:
+                <<: *publish-block
+                filters:
+                  tags:
+                    only: /.+\/v?.+/
+                  branches:
+                    ignore: /.*/
+
 executors:
   circleci-cli:
     parameters:
       version:
-        default: 0.1.2709
         description: |
-          Version of the circleci/circleci-cli Docker image to use. Default is 0.1.2709.
+          Version of the circleci/circleci-cli Docker image to use.
+        default: 0.1.2709
         type: string
     docker:
       - image: circleci/circleci-cli:<< parameters.version >>
 
+# all publish jobs define the same set of parameters, so define them once here
+publish-params: &publish-params
+  executor:
+    type: executor
+    default: circleci-cli
+  token-variable:
+    description: |
+      The env var containing your publish token. Pass this as a literal string such as `$ORB_PUBLISHING_TOKEN`. DO NOT paste the actual token into your configuration. If omitted it's assumed the CLI has already been setup with a valid token.
+    default: ""
+    type: string
+  namespace:
+    type: string
+
 jobs:
   lint:
+    description:
+      Runs yamllint on all of the YAML files in the repository.
     docker:
       - image: singapore/lint-condo
     steps:
       - run: 'yamllint -d "{extends: relaxed, rules: {line-length: {max: 120, allow-non-breakable-inline-mappings: true}}}" .'
 
   build:
+    description: |
+      Uses "circleci orb validate" to validate all of the orbs in the repository.
     parameters:
       executor:
         type: executor
@@ -43,12 +102,10 @@ jobs:
           done
 
   dev-publish:
+    description: |
+      Publishes development versions of the orbs that were newly updated in the CircleCI build.
     parameters:
-      executor:
-        type: executor
-        default: circleci-cli
-      namespace:
-        type: string
+      <<: *publish-params
     executor: << parameters.executor >>
     steps:
       - checkout
@@ -74,16 +131,16 @@ jobs:
               fi
 
               echo "Publishing ${ORB_PATH}..."
-              circleci orb publish ${ORB}orb.yml << parameters.namespace >>/${ORB_NAME}@dev:${CIRCLE_BRANCH}-${CIRCLE_SHA1} --token $CIRCLECI_API_TOKEN
+              circleci orb publish ${ORB}orb.yml << parameters.namespace >>/${ORB_NAME}@dev:${CIRCLE_BRANCH}-${CIRCLE_SHA1} <<# parameters.token-variable >>--token << parameters.token-variable >> <</ parameters.token-variable >>
             done
 
   release-publish:
+    description: |
+      Publishes the production version of the orb that matches the CircleCI tag for the build. The tag for the build
+      must be of the form "{orb_name}/v?{version}" or this job will fail. Otherwise, this job publishes the orb at
+      src/{orb_name}/orb.yml as version {version}.
     parameters:
-      executor:
-        type: executor
-        default: circleci-cli
-      namespace:
-        type: string
+      <<: *publish-params
     executor: << parameters.executor >>
     steps:
       - checkout
@@ -102,4 +159,4 @@ jobs:
                 exit 1
             fi
 
-            circleci orb publish ${ORB_PATH} << parameters.namespace >>/${ORB}@${VERSION} --token $CIRCLECI_API_TOKEN
+            circleci orb publish ${ORB_PATH} << parameters.namespace >>/${ORB}@${VERSION} --token <<# parameters.token-variable >>--token << parameters.token-variable >> <</ parameters.token-variable >>
