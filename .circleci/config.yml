@@ -1,7 +1,7 @@
 version: 2.1
 
 orbs:
-  orb-publisher: nmiyake/orb-publisher@dev:scratch-3
+  orb-publisher: nmiyake/orb-publisher@dev:develop-a67b104010f63dc27680295e4861ade7d440fb8a
 
 release-tags-filter: &release-tags-filter
   filters:
